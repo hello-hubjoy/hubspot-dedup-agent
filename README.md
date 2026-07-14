@@ -8,7 +8,7 @@ Requires only two credentials: an **Anthropic or OpenAI API key** and a **HubSpo
 
 ## What it does
 
-Every night the agent scans your HubSpot company records, identifies likely duplicates using a multi-signal classifier, and creates review tasks in a dedicated HubSpot task queue. Your team works through the tasks and merges or dismisses. When a task is completed, a webhook fires and the decision is permanently recorded on both company records — that pair is never surfaced again.
+Every night the agent first polls its HubSpot review queue for completed tasks, records those decisions, and then scans your company records for new duplicates. Your team works through the tasks and merges or dismisses. Completed tasks are marked as processed, and dismissed pairs are permanently recorded on the associated company records so they never surface again.
 
 **Signals used to identify duplicates:**
 - Domain SLD match (e.g. `acme.com` vs `acme.co`)
@@ -26,6 +26,10 @@ Every night the agent scans your HubSpot company records, identifies likely dupl
 
 ```
 Nightly cron
+    │
+    ▼
+Reconcile completed review tasks
+(poll HubSpot, record decisions, mark tasks processed)
     │
     ▼
 Fetch company list (or full DB)
@@ -58,7 +62,7 @@ Log run summary
 
 **Delta scanning:** after the initial backlog run, only companies modified since their last scan are included. A typical nightly run processes tens of companies rather than thousands.
 
-**Idempotency:** before creating a task, the agent checks for an existing open task with the same subject. Re-runs don't produce duplicate tasks.
+**Idempotency:** before creating a task, the agent checks for an existing open task with the same subject. Completed tasks receive a `DEDUP_PROCESSED` marker only after their company decisions are stored, so interrupted runs retry safely without creating duplicate tasks or decisions.
 
 ---
 
@@ -92,7 +96,7 @@ Copy the key — this is your `HUBSPOT_TOKEN`.
 HubSpot Service Keys don't expose separate scopes for tasks, so there are no
 `crm.objects.tasks.read` or `crm.objects.tasks.write` scopes to select.
 
-A token from a legacy private app with the same scopes also works. Note that Service Keys don't support *app webhook subscriptions*, but this agent doesn't need one — the task-completed webhook in step 8 is a HubSpot **Workflow** action that calls your deployment URL directly.
+A token from a legacy private app with the same scopes also works. The agent reads completed tasks directly from HubSpot at the start of each live run, so no additional HubSpot automation is required.
 
 ### 2. Create HubSpot Custom Properties
 
@@ -177,23 +181,14 @@ railway up
 
 Set the environment variables in your host's dashboard (Railway: your service's **Variables** tab). Most hosts inject `PORT` automatically.
 
-### 8. Set up the HubSpot Workflow (task-completed webhook)
-
-This is what writes the "dismissed" decision when your team completes a task without merging.
-
-1. Go to **Automations → Workflows → Create workflow**
-2. Object type: **Tasks**, trigger: **Task is updated**
-3. Filter: `Task status` → `is equal to` → `Completed`
-4. Enrollment filter: `Queue` → `is any of` → `Dedup Review`
-5. Action: **Send a webhook**
-   - Method: `POST`
-   - URL: `https://your-deployment-url/dedup-task-completed`
-   - Body: `{ "taskId": "{{taskId}}" }` (use the task's object ID token)
-6. Turn on **Re-enrollment** so re-completed tasks fire the webhook again
-
 ---
 
 ## Running
+
+Every live run begins by reconciling completed `[Dedup Review]` tasks. Dismissed
+pairs are stored on their associated companies, merged records are detected from
+their remaining associations, and each handled task receives a
+`DEDUP_PROCESSED` marker. Dry runs skip this reconciliation and remain write-free.
 
 ### Dry run (safe — no HubSpot writes)
 
@@ -273,12 +268,18 @@ On agent-executed merges, `consolidateOnMerge()` unions both records' settled pa
 
 ```
 src/
-├── index.js        Entry: HTTP server + cron scheduler + webhook endpoint
+├── index.js        HTTP server + cron scheduler
 ├── config.js       Env parsing and validation
+├── ai-config.js    AI provider selection
+├── ai-common.js    Shared AI prompt and output schema
+├── ai.js           Provider-neutral AI classifier
+├── anthropic.js    Anthropic adapter
+├── openai.js       OpenAI adapter
 ├── hubspot.js      All HubSpot API calls
-├── normalize.js    Name normalization, domain parsing, public-suffix handling
+├── task-sync.js    Completed review task polling and reconciliation
+├── normalize.js    Name normalization and domain parsing
 ├── signals.js      Signal functions (domain, name, contacts, geo)
-├── classify.js     Pair classifier, union-find clustering, survivor selection
+├── classify.js     Pair classifier, clustering, survivor selection
 ├── pipeline.js     Main dedup pipeline orchestration
 ├── tasks.js        HubSpot task creation and audit notes
 └── store.js        dedup_settled_pairs read/write helpers
@@ -289,8 +290,10 @@ scripts/
 └── test-create-task.js  Create a single test task to verify queue setup
 
 test/
+├── ai-config.test.js
+├── classify.test.js
 ├── normalize.test.js
-└── classify.test.js
+└── task-sync.test.js
 ```
 
 ---

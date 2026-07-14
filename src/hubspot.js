@@ -291,29 +291,89 @@ export async function createTask({ subject, body, ownerId, queueId, companyIds =
 }
 
 // ---------------------------------------------------------------------------
-// Task read + company associations — used by the task-completed webhook
+// Completed review task polling
 // ---------------------------------------------------------------------------
-export async function fetchTaskWithCompanies(taskId) {
-  const [taskRes, assocRes] = await Promise.all([
-    hubspotGet(`${BASE}/crm/v3/objects/tasks/${taskId}?properties=hs_task_subject,hs_task_status`),
-    hubspotGet(`${BASE}/crm/v4/objects/tasks/${taskId}/associations/companies?limit=10`),
-  ]);
+export const DEDUP_TASK_PROCESSED_MARKER = "DEDUP_PROCESSED";
 
-  if (!taskRes.ok) {
-    console.error(`fetchTaskWithCompanies: task ${taskId} fetch failed ${taskRes.status}`);
-    return null;
+export async function searchCompletedDedupTasks() {
+  const tasks = [];
+  let after = null;
+
+  while (true) {
+    const res = await hubspotPost(`${BASE}/crm/v3/objects/tasks/search`, {
+      filterGroups: [
+        {
+          filters: [
+            { propertyName: "hs_task_status", operator: "EQ", value: "COMPLETED" },
+            { propertyName: "hs_task_subject", operator: "CONTAINS_TOKEN", value: "Dedup" },
+            { propertyName: "hs_task_body", operator: "NOT_CONTAINS_TOKEN", value: DEDUP_TASK_PROCESSED_MARKER },
+          ],
+        },
+      ],
+      properties: ["hs_task_subject", "hs_task_status", "hs_task_body"],
+      sorts: ["hs_lastmodifieddate"],
+      limit: 200,
+      ...(after ? { after } : {}),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`searchCompletedDedupTasks failed: ${res.status} ${err}`);
+    }
+
+    const data = await res.json();
+    for (const task of data.results || []) {
+      const subject = task.properties?.hs_task_subject || "";
+      const body = task.properties?.hs_task_body || "";
+      if (
+        subject.startsWith("[Dedup Review]") &&
+        !body.includes(DEDUP_TASK_PROCESSED_MARKER)
+      ) {
+        tasks.push({ taskId: String(task.id), subject, body });
+      }
+    }
+
+    after = data.paging?.next?.after || null;
+    if (!after) break;
   }
-  const task = await taskRes.json();
-  const subject = task.properties?.hs_task_subject || "";
-  const status = task.properties?.hs_task_status || "";
 
-  let companyIds = [];
-  if (assocRes.ok) {
-    const assocData = await assocRes.json();
-    companyIds = (assocData.results || []).map((r) => String(r.toObjectId));
+  return tasks;
+}
+
+export async function fetchTaskCompanyIds(taskId) {
+  const companyIds = [];
+  let after = null;
+
+  while (true) {
+    const params = new URLSearchParams({ limit: 500 });
+    if (after) params.set("after", after);
+    const res = await hubspotGet(
+      `${BASE}/crm/v4/objects/tasks/${taskId}/associations/companies?${params}`
+    );
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`fetchTaskCompanyIds(${taskId}) failed: ${res.status} ${err}`);
+    }
+    const data = await res.json();
+    companyIds.push(...(data.results || []).map((result) => String(result.toObjectId)));
+    after = data.paging?.next?.after || null;
+    if (!after) break;
   }
 
-  return { taskId, subject, status, companyIds };
+  return [...new Set(companyIds)];
+}
+
+export async function markDedupTaskProcessed(taskId, currentBody = "") {
+  if (currentBody.includes(DEDUP_TASK_PROCESSED_MARKER)) return true;
+  const body = `${currentBody.trim()}\n\n[${DEDUP_TASK_PROCESSED_MARKER}]`.trim();
+  const res = await hubspotPatch(`${BASE}/crm/v3/objects/tasks/${taskId}`, {
+    properties: { hs_task_body: body },
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`markDedupTaskProcessed(${taskId}) failed: ${res.status} ${err}`);
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------------------

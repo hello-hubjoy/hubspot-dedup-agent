@@ -25,6 +25,7 @@ import {
 } from "./classify.js";
 import { getSettledPairs, addSettledPair, consolidateOnMerge, markLastScanned } from "./store.js";
 import { snapshotBeforeMerge, createReviewTask, writeAuditNoteOnSurvivor } from "./tasks.js";
+import { syncCompletedReviewTasks } from "./task-sync.js";
 import { resolveFinalDomain } from "./http.js";
 
 const ENRICH_BATCH = 25; // concurrent enrichments per batch
@@ -248,6 +249,12 @@ export async function runDedup({ verbose = false } = {}) {
   console.log(
     `[dedup] Starting run — dryRun=${dryRun}, liveMerge=${liveMerge}, maxAutoMerges=${maxAutoMergesPerRun}, maxTasks=${maxTasksPerRun}`
   );
+
+  // Reconcile completed review tasks before generating new candidates. A failed
+  // sync aborts the live run so completed tasks cannot be recreated as duplicates.
+  if (!dryRun) {
+    await syncCompletedReviewTasks();
+  }
 
   // 1. Fetch scan set: ICP list or full database if no list ID configured
   let memberIds;

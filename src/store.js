@@ -15,13 +15,25 @@ export async function getSettledPairs(companyId) {
 }
 
 export async function addSettledPair(companyId, key, decision) {
+  return addSettledPairs(companyId, [{ key, decision }]);
+}
+
+export async function addSettledPairs(companyId, decisions) {
   const existing = await getSettledPairs(companyId);
-  // Remove any prior entry for this pair key (idempotent update)
-  const filtered = [...existing].filter((e) => !e.startsWith(key + "|"));
-  filtered.push(`${key}|${decision}`);
-  await updateCompanyProperties(companyId, {
-    [PROP]: filtered.join("\n"),
-  });
+  const entries = new Map();
+
+  for (const entry of existing) {
+    const key = entry.split("|").slice(0, 2).join("|");
+    if (key) entries.set(key, entry);
+  }
+  for (const { key, decision } of decisions) {
+    entries.set(key, `${key}|${decision}`);
+  }
+
+  const next = [...entries.values()].sort().join("\n");
+  const current = [...existing].sort().join("\n");
+  if (next === current) return true;
+  return updateCompanyProperties(companyId, { [PROP]: next });
 }
 
 // Called before executing a merge — unions both records' settled pairs onto survivor,
