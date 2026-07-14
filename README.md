@@ -4,8 +4,6 @@ A nightly agent that automatically finds duplicate company records in HubSpot an
 
 Requires only two credentials: an **Anthropic API key** and a **HubSpot Service Key**.
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/new?template=https://github.com/hello-hubjoy/hubspot-dedup-agent)
-
 ---
 
 ## What it does
@@ -159,7 +157,7 @@ cp .env.example .env
 
 ### 7. Deploy
 
-Any Node.js 18+ host works. For Railway:
+Any Node.js 18+ host works. For Railway, either use the dashboard (**New Project → Deploy from GitHub repo** → pick your fork of this repo) or the CLI:
 
 ```bash
 railway login
