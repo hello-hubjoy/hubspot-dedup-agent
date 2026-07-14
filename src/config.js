@@ -1,10 +1,4 @@
-import { readFileSync } from "fs";
-
-function required(name) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing required env var: ${name}`);
-  return v;
-}
+import { resolveAIProvider } from "./ai-config.js";
 
 function optional(name, fallback = null) {
   return process.env[name] || fallback;
@@ -30,9 +24,26 @@ function req(name) {
   return v;
 }
 
+let aiProvider = null;
+try {
+  aiProvider = resolveAIProvider();
+} catch (err) {
+  missing.push(err.message);
+}
+
 const config = {
-  anthropic: {
-    apiKey: req("ANTHROPIC_API_KEY"),
+  ai: {
+    provider: aiProvider,
+    anthropic: {
+      apiKey: optional("ANTHROPIC_API_KEY"),
+      fastModel: optional("ANTHROPIC_FAST_MODEL", "claude-haiku-4-5-20251001"),
+      complexModel: optional("ANTHROPIC_COMPLEX_MODEL", "claude-sonnet-4-6"),
+    },
+    openai: {
+      apiKey: optional("OPENAI_API_KEY"),
+      fastModel: optional("OPENAI_FAST_MODEL", "gpt-4o-mini"),
+      complexModel: optional("OPENAI_COMPLEX_MODEL", "gpt-4.1"),
+    },
   },
   hubspot: {
     token: req("HUBSPOT_TOKEN"),

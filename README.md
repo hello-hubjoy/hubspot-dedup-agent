@@ -2,7 +2,7 @@
 
 A nightly agent that automatically finds duplicate company records in HubSpot and routes them to a review task queue. Designed for B2B sales teams where CRM data quality directly impacts pipeline visibility.
 
-Requires only two credentials: an **Anthropic API key** and a **HubSpot Service Key**.
+Requires only two credentials: an **Anthropic or OpenAI API key** and a **HubSpot Service Key**.
 
 ---
 
@@ -65,8 +65,8 @@ Log run summary
 ## Prerequisites
 
 - HubSpot account (any tier with API access)
-- Anthropic API key ([console.anthropic.com](https://console.anthropic.com))
-- Any Node.js 18+ host ([Railway](https://railway.app), Render, Fly, a VPS, …)
+- Anthropic API key ([console.anthropic.com](https://console.anthropic.com)) or OpenAI API key ([platform.openai.com](https://platform.openai.com/api-keys))
+- Any Node.js 20+ host ([Railway](https://railway.app), Render, Fly, a VPS, …)
 
 ---
 
@@ -81,12 +81,13 @@ crm.objects.companies.read
 crm.objects.companies.write
 crm.objects.contacts.read
 crm.objects.deals.read
-crm.objects.tasks.read
-crm.objects.tasks.write
 crm.lists.read
 ```
 
 Copy the key — this is your `HUBSPOT_TOKEN`.
+
+HubSpot Service Keys don't expose separate scopes for tasks, so there are no
+`crm.objects.tasks.read` or `crm.objects.tasks.write` scopes to select.
 
 A token from a legacy private app with the same scopes also works. Note that Service Keys don't support *app webhook subscriptions*, but this agent doesn't need one — the task-completed webhook in step 8 is a HubSpot **Workflow** action that calls your deployment URL directly.
 
@@ -141,7 +142,13 @@ cp .env.example .env
 
 | Variable | Required | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | ✅ | Anthropic API key from console.anthropic.com |
+| `ANTHROPIC_API_KEY` | One AI key required | Anthropic API key from console.anthropic.com |
+| `OPENAI_API_KEY` | One AI key required | OpenAI API key from platform.openai.com |
+| `AI_PROVIDER` | Only if both keys are set | `anthropic` or `openai` |
+| `ANTHROPIC_FAST_MODEL` | | Default `claude-haiku-4-5-20251001` |
+| `ANTHROPIC_COMPLEX_MODEL` | | Default `claude-sonnet-4-6` |
+| `OPENAI_FAST_MODEL` | | Default `gpt-4o-mini` |
+| `OPENAI_COMPLEX_MODEL` | | Default `gpt-4.1` |
 | `HUBSPOT_TOKEN` | ✅ | Service Key (legacy private app token also works) |
 | `HUBSPOT_PORTAL_ID` | ✅ | Your HubSpot portal ID |
 | `HUBSPOT_LIST_ID` | | Company list ID to scan (omit for full DB) |
@@ -155,9 +162,14 @@ cp .env.example .env
 | `DEDUP_CRON` | | Default `0 2 * * *` (2am daily) |
 | `CRON_TZ` | | Default `America/Los_Angeles` |
 
+Set either `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` and the agent selects that
+provider automatically. If both keys are present, set `AI_PROVIDER` explicitly
+so deployments never switch providers by accident. If an AI request fails, the
+agent falls back to its deterministic rule-based classifier for that pair.
+
 ### 7. Deploy
 
-Any Node.js 18+ host works. For Railway, either use the dashboard (**New Project → Deploy from GitHub repo** → pick your fork of this repo) or the CLI:
+Any Node.js 20+ host works. For Railway, either use the dashboard (**New Project → Deploy from GitHub repo** → pick your fork of this repo) or the CLI:
 
 ```bash
 railway login

@@ -5,7 +5,7 @@ import {
   engagedContactDomainsDistinctNoCross, signalDomainRedirect,
 } from "./signals.js";
 import { normalizeName } from "./normalize.js";
-import { classifyPairWithClaude } from "./claude.js";
+import { classifyPairWithAI } from "./ai.js";
 
 export const AUTO_MERGE = "AUTO_MERGE";
 export const REVIEW = "REVIEW";
@@ -197,14 +197,14 @@ export function classifyPair(a, b, settledDecisions = new Set()) {
 }
 
 // ---------------------------------------------------------------------------
-// Claude-powered classifier — replaces rule-based decision with LLM judgment.
-// Falls back to rule-based classifyPair() if Claude is unavailable or errors.
+// AI-powered classifier — replaces rule-based decision with LLM judgment.
+// Falls back to rule-based classifyPair() if the configured provider is unavailable or errors.
 // Settled-pair suppression and hard blockers are still handled deterministically.
 // ---------------------------------------------------------------------------
 export async function classifyPairAsync(a, b, settledDecisions = new Set()) {
   const key = pairKey(a.id, b.id);
 
-  // Settled pairs are always deterministic — never ask Claude about them
+  // Settled pairs are always deterministic — never ask the AI provider about them
   for (const entry of settledDecisions) {
     if (entry.startsWith(key + "|")) {
       const decision = entry.split("|")[2];
@@ -214,15 +214,15 @@ export async function classifyPairAsync(a, b, settledDecisions = new Set()) {
     }
   }
 
-  // Hard structural blockers — Claude can't override these
+  // Hard structural blockers — the AI provider can't override these
   if (isModeledParentChild(a, b)) {
     return { decision: CONFIRMED_DISTINCT, reason: "modeled_parent_child", survivorId: null };
   }
 
   const B = blockers(a, b);
 
-  // Ask Claude for the decision, passing the blocker context
-  const result = await classifyPairWithClaude(a, b, B);
+  // Ask the configured AI provider for the decision, passing the blocker context
+  const result = await classifyPairWithAI(a, b, B);
 
   if (result) {
     const survivorId = result.decision !== IGNORE && result.decision !== CONFIRMED_DISTINCT
@@ -231,8 +231,8 @@ export async function classifyPairAsync(a, b, settledDecisions = new Set()) {
     return { decision: result.decision, reason: result.reason, survivorId };
   }
 
-  // Fallback to rule-based classifier if Claude fails
-  console.warn(`[classify] Claude unavailable for ${a.name} / ${b.name} — falling back to rule-based`);
+  // Fallback to rule-based classifier if the provider fails
+  console.warn(`[classify] AI provider unavailable for ${a.name} / ${b.name} — falling back to rule-based`);
   return classifyPair(a, b, settledDecisions);
 }
 
