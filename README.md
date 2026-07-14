@@ -4,6 +4,8 @@ A nightly agent that automatically finds duplicate company records in HubSpot an
 
 Requires only two credentials: an **Anthropic API key** and a **HubSpot private app token**.
 
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/new?template=https://github.com/outbuild-revops/hubspot-dedup-agent)
+
 ---
 
 ## What it does
