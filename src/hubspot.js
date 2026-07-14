@@ -340,7 +340,7 @@ export async function findOpenDedupTask(subject) {
 
 // ---------------------------------------------------------------------------
 // Merge companies — primary survives, secondary is retired
-// Requires companies.write + merge scope on the private app
+// Requires companies.write + merge scope on the service key
 // ---------------------------------------------------------------------------
 export async function mergeCompanies(primaryId, secondaryId) {
   const res = await hubspotPost(

@@ -2,9 +2,9 @@
 
 A nightly agent that automatically finds duplicate company records in HubSpot and routes them to a review task queue. Designed for B2B sales teams where CRM data quality directly impacts pipeline visibility.
 
-Requires only two credentials: an **Anthropic API key** and a **HubSpot private app token**.
+Requires only two credentials: an **Anthropic API key** and a **HubSpot Service Key**.
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/new?template=https://github.com/outbuild-revops/hubspot-dedup-agent)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/new?template=https://github.com/hello-hubjoy/hubspot-dedup-agent)
 
 ---
 
@@ -74,9 +74,9 @@ Log run summary
 
 ## Setup
 
-### 1. HubSpot Private App
+### 1. HubSpot Service Key
 
-Create a private app at **Settings → Integrations → Private Apps** with these scopes:
+Create a Service Key at **Settings → Integrations → Service Keys** (or **Development → Keys → Service Keys**) with these scopes:
 
 ```
 crm.objects.companies.read
@@ -88,7 +88,9 @@ crm.objects.tasks.write
 crm.lists.read
 ```
 
-Copy the token — this is your `HUBSPOT_TOKEN`.
+Copy the key — this is your `HUBSPOT_TOKEN`.
+
+A token from a legacy private app with the same scopes also works. Note that Service Keys don't support *app webhook subscriptions*, but this agent doesn't need one — the task-completed webhook in step 8 is a HubSpot **Workflow** action that calls your deployment URL directly.
 
 ### 2. Create HubSpot Custom Properties
 
@@ -112,7 +114,7 @@ To find the queue ID: open the queue in HubSpot and copy the numeric ID from the
 
 ### 4. Find your HubSpot Owner ID
 
-Your **owner ID** is different from your user ID. Find it via the API with your private app token:
+Your **owner ID** is different from your user ID. Find it via the API with your Service Key:
 
 ```bash
 curl -H "Authorization: Bearer YOUR_TOKEN" \
@@ -142,7 +144,7 @@ cp .env.example .env
 | Variable | Required | Description |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | ✅ | Anthropic API key from console.anthropic.com |
-| `HUBSPOT_TOKEN` | ✅ | Private app bearer token |
+| `HUBSPOT_TOKEN` | ✅ | Service Key (legacy private app token also works) |
 | `HUBSPOT_PORTAL_ID` | ✅ | Your HubSpot portal ID |
 | `HUBSPOT_LIST_ID` | | Company list ID to scan (omit for full DB) |
 | `HUBSPOT_TASK_QUEUE_ID` | | "Dedup Review" queue ID |
