@@ -78,10 +78,13 @@ Create a Service Key at **Settings → Integrations → Service Keys** (or **Dev
 
 ```
 crm.objects.companies.read
-crm.objects.companies.write
-crm.objects.contacts.read
 crm.objects.deals.read
+crm.objects.contacts.read
+crm.objects.companies.write
 crm.lists.read
+crm.objects.contacts.write
+crm.schemas.companies.write
+crm.schemas.companies.read
 ```
 
 Copy the key — this is your `HUBSPOT_TOKEN`.
