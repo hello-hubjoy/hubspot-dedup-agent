@@ -1,0 +1,23 @@
+{
+  "name": "hubspot-dedup-agent",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dry-run": "node scripts/dry-run.js",
+    "setup-properties": "node scripts/setup-properties.js",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest --testPathPattern=test/"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
+    "express": "^4.22.2",
+    "node-cron": "^3.0.3",
+    "tldts": "^6.1.32"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "jest": {
+    "transform": {}
+  }
+}
