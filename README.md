@@ -116,14 +116,9 @@ To find the queue ID: open the queue in HubSpot and copy the numeric ID from the
 
 ### 4. Find your HubSpot Owner ID
 
-Your **owner ID** is different from your user ID. Find it via the API with your Service Key:
-
-```bash
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  "https://api.hubapi.com/crm/v3/owners?email=you@company.com"
-```
-
-Use the `id` field from the response.
+Your **owner ID** is different from your user ID. In HubSpot, open the
+**Contact owner** property and find your name in its list of values. The numeric
+value beside your name is your owner ID; use it for `HUBSPOT_TASK_OWNER_ID`.
 
 ### 5. (Optional) Create a company list to scan
 
