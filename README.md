@@ -36,7 +36,7 @@ Fetch company list (or full DB)
     │
     ▼
 Build candidate pairs via blocking keys
-(domain SLD + name token buckets + HTTP redirect cross-reference)
+(domain SLD + similarity-gated name buckets + HTTP redirect cross-reference)
     │
     ▼
 Enrich candidates

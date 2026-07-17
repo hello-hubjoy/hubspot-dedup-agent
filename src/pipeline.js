@@ -11,7 +11,8 @@ import {
   updateCompanyProperties,
   findOpenDedupTask,
 } from "./hubspot.js";
-import { sld, registrableDomain, normalizeName } from "./normalize.js";
+import { sld, registrableDomain } from "./normalize.js";
+import { candidatePairs } from "./candidates.js";
 import {
   classifyPair,
   classifyPairAsync,
@@ -197,46 +198,6 @@ async function buildRedirectCandidates(shells, rawMap, dryRun) {
   }
 
   console.log(`[dedup] Redirect pre-pass: ${pairs.length} cross-reference pairs found`);
-  return pairs;
-}
-
-// ---------------------------------------------------------------------------
-// Blocking-key bucketing — O(n) candidate pair generation using shells only
-// ---------------------------------------------------------------------------
-function candidatePairs(shells) {
-  const buckets = new Map();
-
-  function addToBucket(key, shell) {
-    if (!key) return;
-    if (!buckets.has(key)) buckets.set(key, []);
-    buckets.get(key).push(shell);
-  }
-
-  for (const c of shells) {
-    const domKey = sld(registrableDomain(c.domain));
-    if (domKey) addToBucket(`dom:${domKey}`, c);
-    const { normalized } = normalizeName(c.name);
-    const firstToken = normalized.split(" ")[0];
-    // Require at least 4 chars to avoid single-letter / very short token noise (e.g. "jp", "jm")
-    if (firstToken && firstToken.length >= 4) addToBucket(`name:${firstToken}`, c);
-  }
-
-  const seen = new Set();
-  const pairs = [];
-
-  for (const bucket of buckets.values()) {
-    if (bucket.length < 2) continue;
-    for (let i = 0; i < bucket.length; i++) {
-      for (let j = i + 1; j < bucket.length; j++) {
-        const key = pairKey(bucket[i].id, bucket[j].id);
-        if (!seen.has(key)) {
-          seen.add(key);
-          pairs.push([bucket[i], bucket[j]]);
-        }
-      }
-    }
-  }
-
   return pairs;
 }
 
