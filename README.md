@@ -40,7 +40,7 @@ Build candidate pairs via blocking keys
     │
     ▼
 Enrich candidates
-(contacts, deals, engagement scores, email domains)
+(contacts, deals, engagement scores, email domains; checkpoint each batch)
     │
     ▼
 Classify each pair → AUTO_MERGE | REVIEW | CONFIRMED_DISTINCT
@@ -61,6 +61,12 @@ Log run summary
 ```
 
 **Delta scanning:** after the initial backlog run, only companies modified since their last scan are included. A typical nightly run processes tens of companies rather than thousands.
+
+**Resumable enrichment:** each successful enrichment batch is checkpointed on
+its company records before the next batch starts. If a run stops during
+enrichment or classification, the next run reuses valid checkpoints rather than
+repeating completed HubSpot enrichment calls. Checkpoints refresh after 24 hours
+or when the relevant company association/activity counters change.
 
 **Idempotency:** before creating a task, the agent checks for an existing open task with the same subject. Completed tasks receive a `DEDUP_PROCESSED` marker only after their company decisions are stored, so interrupted runs retry safely without creating duplicate tasks or decisions.
 
@@ -110,7 +116,7 @@ This creates a `Dedup (Internal)` property group with:
 - `dedup_settled_pairs` — stores dismissed/merged pair decisions
 - `dedup_last_scanned_at` — drives the delta filter
 - `dedup_redirect_domain` — HTTP redirect cache (30-day TTL)
-- `dedup_score_cache` — informational score cache
+- `dedup_score_cache` — resumable enrichment checkpoint (24-hour TTL)
 
 ### 3. Create the "Dedup Review" Task Queue
 

@@ -13,6 +13,7 @@ import {
 } from "./hubspot.js";
 import { sld, registrableDomain } from "./normalize.js";
 import { candidatePairs } from "./candidates.js";
+import { hydrateEnrichmentCache, serializeEnrichmentCache } from "./enrichment-cache.js";
 import {
   classifyPair,
   classifyPairAsync,
@@ -49,7 +50,15 @@ function shellFromRaw(raw) {
     parentId: p.hs_parent_company_id || null,
     lastActivityAt: p.notes_last_activity || p.hs_lastmodifieddate || null,
     createdAt: p.createdate || null,
-    propertyFillCount: Object.values(p).filter((v) => v !== null && v !== undefined && v !== "").length,
+    // Internal checkpoint/audit fields must not make an otherwise empty CRM
+    // record look more complete to stub detection or survivor selection.
+    propertyFillCount: Object.entries(p).filter(
+      ([key, value]) =>
+        !key.startsWith("dedup_") &&
+        value !== null &&
+        value !== undefined &&
+        value !== ""
+    ).length,
     // Placeholders — populated in Phase 2 for candidates only
     openDealIds: [],
     childIds: [],
@@ -293,11 +302,59 @@ export async function runDedup({ verbose = false } = {}) {
   console.log(`[dedup] Enriching ${candidateShells.length} candidate companies (of ${shells.length} total)...`);
 
   const enriched = new Map();
-  for (let i = 0; i < candidateShells.length; i += ENRICH_BATCH) {
-    const chunk = candidateShells.slice(i, i + ENRICH_BATCH);
-    const results = await Promise.all(chunk.map((s) => enrichCompany(s, rawMap.get(s.id)?.properties || {})));
-    for (const c of results) enriched.set(c.id, c);
-    if (verbose) process.stdout.write(`\r[dedup] Enriched ${Math.min(i + ENRICH_BATCH, candidateShells.length)}/${candidateShells.length}`);
+  const uncachedShells = [];
+  for (const shell of candidateShells) {
+    const rawProps = rawMap.get(shell.id)?.properties || {};
+    const cached = hydrateEnrichmentCache(
+      shell,
+      rawProps,
+      rawProps.dedup_score_cache
+    );
+    if (cached) {
+      enriched.set(cached.id, cached);
+    } else {
+      uncachedShells.push(shell);
+    }
+  }
+  console.log(
+    `[dedup] Enrichment cache: ${enriched.size} reused, ${uncachedShells.length} to refresh`
+  );
+
+  for (let i = 0; i < uncachedShells.length; i += ENRICH_BATCH) {
+    const chunk = uncachedShells.slice(i, i + ENRICH_BATCH);
+    const outcomes = await Promise.allSettled(chunk.map(async (shell) => {
+      const rawProps = rawMap.get(shell.id)?.properties || {};
+      const company = await enrichCompany(shell, rawProps);
+      const checkpoint = serializeEnrichmentCache(company, rawProps);
+      const saved = await updateCompanyProperties(company.id, {
+        dedup_score_cache: checkpoint,
+      });
+      if (!saved) {
+        throw new Error(`Failed to persist enrichment checkpoint for company ${company.id}`);
+      }
+      return company;
+    }));
+
+    // Keep every successful company even if a neighbor in the same concurrent
+    // batch failed. Those checkpoints are reusable on the next run.
+    for (const outcome of outcomes) {
+      if (outcome.status === "fulfilled") {
+        enriched.set(outcome.value.id, outcome.value);
+      }
+    }
+    const failures = outcomes.filter((outcome) => outcome.status === "rejected");
+    if (failures.length > 0) {
+      const messages = failures.map((outcome) => outcome.reason?.message || String(outcome.reason));
+      throw new Error(
+        `Enrichment batch failed for ${failures.length} compan${failures.length === 1 ? "y" : "ies"}: ${messages.join("; ")}`
+      );
+    }
+
+    if (verbose) {
+      process.stdout.write(
+        `\r[dedup] Enriched and checkpointed ${Math.min(i + ENRICH_BATCH, uncachedShells.length)}/${uncachedShells.length}`
+      );
+    }
   }
   if (verbose) console.log();
 

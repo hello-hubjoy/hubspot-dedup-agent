@@ -155,6 +155,7 @@ const COMPANY_PROPS = [
   "hs_analytics_num_visits",
   "dedup_settled_pairs",
   "dedup_last_scanned_at",
+  "dedup_score_cache",
   "dedup_redirect_domain",
 ];
 

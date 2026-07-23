@@ -63,7 +63,7 @@ async function run() {
       type: "string",
       fieldType: "textarea",
       groupName: "dedup_internal",
-      description: "Last run's top candidate pair and signals (informational, overwritten each run).",
+      description: "Durable enrichment checkpoint used to resume interrupted dedup runs. Refreshed after 24 hours or when source counters change.",
       hidden: false,
       formField: false,
       displayOrder: 3,
